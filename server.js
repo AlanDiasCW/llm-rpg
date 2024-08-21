@@ -27,6 +27,7 @@ let gameState = {
   lastDecision: '',
   currentSituation: '',
   options: [],
+  nextOutcomes: {}, // Will store preloaded outcomes for each option
   votes: {},
   players: new Set(),
   timer: null,
@@ -34,19 +35,100 @@ let gameState = {
 };
 
 async function generateImage(prompt) {
-    try {
-      const response = await openai.images.generate({
-        model: "dall-e-3",
-        prompt: prompt,
-        n: 1,
-        size: "1024x1024",
-      });
-      return response.data[0].url;
-    } catch (error) {
-      console.error("Error generating image:", error);
-      return null;
-    }
+  try {
+    const response = await openai.images.generate({
+      model: "dall-e-3",
+      prompt: prompt,
+      n: 1,
+      size: "1024x1024",
+    });
+    return response.data[0].url;
+  } catch (error) {
+    console.error("Error generating image:", error);
+    return null;
   }
+}
+
+async function generateOutcome(option) {
+  const prompt = `
+Story so far: ${gameState.storySoFar}
+Last decision: ${gameState.lastDecision}
+Current situation: ${gameState.currentSituation}
+
+Player chose: ${option}
+
+Continue the story based on this choice and provide exactly three new options for the player.
+Ensure the new part of the story is no more than two sentences long.
+If the chosen option would result in the player's death, end the story and indicate that the game is over.
+
+Format your response as follows:
+New situation: [Your new situation here]
+Options:
+1. [First option]
+2. [Second option]
+3. [Third option]
+
+If it's a game over scenario, just respond with:
+Game over: [Your game over message here]
+`;
+
+  const response = await anthropic.messages.create({
+    model: 'claude-3-sonnet-20240229',
+    max_tokens: 300,
+    messages: [
+      {
+        role: 'user',
+        content: prompt
+      }
+    ],
+  });
+
+  const result = response.content[0].text.trim().split('\n');
+  const situationIndex = result.findIndex(line => line.startsWith('New situation:'));
+  const optionsIndex = result.findIndex(line => line.startsWith('Options:'));
+
+  let newSituation, newOptions;
+
+  if (result[0].toLowerCase().startsWith('game over:')) {
+    newSituation = result[0];
+    newOptions = ['Game Over'];
+  } else if (situationIndex !== -1 && optionsIndex !== -1) {
+    newSituation = result[situationIndex].replace('New situation:', '').trim();
+    newOptions = result.slice(optionsIndex + 1).map(option => option.replace(/^\d+\.\s*/, '').trim()).filter(option => option !== '');
+  } else {
+    console.error('Unexpected response format from Claude');
+    newSituation = 'Error generating next step';
+    newOptions = [];
+  }
+
+  // Ensure we always have exactly 3 non-empty options
+  while (newOptions.length < 3 && !newOptions.includes('Game Over')) {
+    newOptions.push(`Fallback option ${newOptions.length + 1}`);
+  }
+  newOptions = newOptions.slice(0, 3);
+
+  // Generate image for the new situation
+  const imagePrompt = `Create a simple image for a text-based RPG game scenario: ${newSituation}`;
+  const imageUrl = await generateImage(imagePrompt);
+
+  return { newSituation, newOptions, imageUrl };
+}
+
+async function preloadOutcomes() {
+  const outcomePromises = gameState.options.map(async (option, index) => {
+    const outcome = await generateOutcome(option);
+    return { index, outcome };
+  });
+
+  const outcomes = await Promise.all(outcomePromises);
+  const outcomeMap = {};
+  outcomes.forEach(({ index, outcome }) => {
+    outcomeMap[index] = outcome;
+  });
+
+  gameState.nextOutcomes = outcomeMap;
+  console.log('Preloaded outcomes:', gameState.nextOutcomes);
+}
 
 async function generateInitialStory() {
   const response = await anthropic.messages.create({
@@ -85,78 +167,29 @@ async function generateInitialStory() {
   console.log('Initial story generated:');
   console.log('Current situation:', gameState.currentSituation);
   console.log('Options:', gameState.options);
-  console.log('Image URL:', gameState.currentImage);
+  console.log('Current image:', gameState.currentImage);
+
+  // Preload outcomes for initial options
+  await preloadOutcomes();
 }
 
-async function generateNextStep(chosenOption) {
-  const prompt = `
-Story so far: ${gameState.storySoFar}
-Last decision: ${gameState.lastDecision}
-Current situation: ${gameState.currentSituation}
-
-Player chose: ${chosenOption}
-
-Continue the story based on this choice and provide exactly three new options for the player.
-Ensure the new part of the story is no more than two sentences long.
-If the chosen option would result in the player's death, end the story and indicate that the game is over.
-
-Format your response as follows:
-New situation: [Your new situation here]
-Options:
-1. [First option]
-2. [Second option]
-3. [Third option]
-
-If it's a game over scenario, just respond with:
-Game over: [Your game over message here]
-`;
-
-  const response = await anthropic.messages.create({
-    model: 'claude-3-sonnet-20240229',
-    max_tokens: 300,
-    messages: [
-      {
-        role: 'user',
-        content: prompt
-      }
-    ],
-  });
-
-  const result = response.content[0].text.trim().split('\n');
-  const situationIndex = result.findIndex(line => line.startsWith('New situation:'));
-  const optionsIndex = result.findIndex(line => line.startsWith('Options:'));
+function moveToNextStep(chosenOption) {
+  const outcome = gameState.nextOutcomes[chosenOption];
   
-  if (result[0].toLowerCase().startsWith('game over:')) {
-    gameState.storySoFar += `\n${gameState.currentSituation}`;
-    gameState.lastDecision = chosenOption;
-    gameState.currentSituation = result[0];
-    gameState.options = ['Game Over'];
-    return false;
-  } else if (situationIndex !== -1 && optionsIndex !== -1) {
-    gameState.storySoFar += `\n${gameState.currentSituation}`;
-    gameState.lastDecision = chosenOption;
-    gameState.currentSituation = result[situationIndex].replace('New situation:', '').trim();
-    gameState.options = result.slice(optionsIndex + 1).map(option => option.replace(/^\d+\.\s*/, '').trim()).filter(option => option !== '');
-  } else {
-    console.error('Unexpected response format from Claude');
-    gameState.currentSituation = 'Error generating next step';
-    gameState.options = [];
-  }
+  gameState.storySoFar += `\n${gameState.currentSituation}`;
+  gameState.lastDecision = gameState.options[chosenOption];
+  gameState.currentSituation = outcome.newSituation;
+  gameState.options = outcome.newOptions;
+  gameState.currentImage = outcome.imageUrl;
 
-  // Ensure we always have exactly 3 non-empty options
-  while (gameState.options.length < 3) {
-    gameState.options.push(`Fallback option ${gameState.options.length + 1}`);
-  }
-  gameState.options = gameState.options.slice(0, 3);
-
-  // Generate image for the new situation
-  const imagePrompt = `Create a simple image for a text-based RPG game scenario: ${gameState.currentSituation}`;
-  gameState.currentImage = await generateImage(imagePrompt);
-
-  console.log('Next step generated:');
+  console.log('Moved to next step:');
   console.log('Current situation:', gameState.currentSituation);
   console.log('Options:', gameState.options);
-  console.log('Image URL:', gameState.currentImage);
+  console.log('Current image:', gameState.currentImage);
+
+  if (gameState.options.includes('Game Over')) {
+    return false;
+  }
 
   return true;
 }
@@ -175,9 +208,12 @@ async function startNewRound() {
       processVotes();
     }
   }, 1000);
+
+  // Preload outcomes for the new options asynchronously
+  preloadOutcomes().catch(console.error);
 }
 
-async function processVotes() {
+function processVotes() {
   console.log('Processing votes:');
   console.log('Current votes:', gameState.votes);
 
@@ -194,12 +230,11 @@ async function processVotes() {
   
   console.log('Winning option:', winningOption);
 
-  const chosenOption = gameState.options[winningOption];
-  console.log('Chosen option:', chosenOption);
-
-  const gameContinues = await generateNextStep(chosenOption);
+  const gameContinues = moveToNextStep(winningOption);
   
-  if (gameState.options.includes('Game Over') || !gameState.options.length) {
+  io.emit('updateGameState', gameState);
+  
+  if (!gameContinues) {
     io.emit('gameOver');
   } else if (gameState.players.size > 0) {
     startNewRound();
