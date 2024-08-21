@@ -7,20 +7,32 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
+            margin: 0;
             padding: 20px;
             background-color: #f0f0f0;
         }
         .game-container {
+            display: flex;
+            max-width: 1200px;
+            margin: 0 auto;
             background-color: white;
             border-radius: 10px;
-            padding: 20px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
-        h1 {
+        .story-so-far {
+            width: 30%;
+            padding: 20px;
+            border-right: 1px solid #e0e0e0;
+            overflow-y: auto;
+            max-height: 80vh;
+        }
+        .main-game {
+            width: 70%;
+            padding: 20px;
+        }
+        h1, h2 {
             color: #333;
-            text-align: center;
+            margin-top: 0;
         }
         .story-section {
             margin-bottom: 20px;
@@ -28,10 +40,18 @@
             background-color: #f9f9f9;
             border-radius: 5px;
         }
-        .story-section h2 {
-            color: #666;
-            font-size: 1.2em;
-            margin-bottom: 5px;
+        #gameImage {
+            max-width: 100%;
+            height: auto;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .options-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
         }
         #options {
             list-style-type: none;
@@ -50,62 +70,68 @@
         }
         #timer {
             font-weight: bold;
-            text-align: center;
-            margin-top: 20px;
             color: #666;
         }
     </style>
 </head>
 <body>
     <div class="game-container">
-        <h1>RPG Game</h1>
-        <div class="story-section">
+        <div class="story-so-far">
             <h2>Story So Far</h2>
             <div id="storySoFar"></div>
         </div>
-        <div class="story-section">
-            <h2>Last Decision</h2>
-            <div id="lastDecision"></div>
+        <div class="main-game">
+            <h1>RPG Game</h1>
+            <div class="story-section">
+                <h2>Current Situation</h2>
+                <div id="currentSituation"></div>
+            </div>
+            <img id="gameImage" alt="Game Scenario">
+            <div class="story-section">
+                <h2>Last Decision</h2>
+                <div id="lastDecision"></div>
+            </div>
+            <div class="options-header">
+                <h2>Options</h2>
+                <div id="timer"></div>
+            </div>
+            <ul id="options"></ul>
         </div>
-        <div class="story-section">
-            <h2>Current Situation</h2>
-            <div id="currentSituation"></div>
-        </div>
-        <h2>Options</h2>
-        <ul id="options"></ul>
-        <div id="timer"></div>
     </div>
-<script src="/socket.io/socket.io.js"></script>
-<script>
-    const socket = io();
 
-    const storySoFarElement = document.getElementById('storySoFar');
-    const lastDecisionElement = document.getElementById('lastDecision');
-    const currentSituationElement = document.getElementById('currentSituation');
-    const optionsElement = document.getElementById('options');
-    const timerElement = document.getElementById('timer');
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
 
-    socket.on('updateGameState', (gameState) => {
-        storySoFarElement.textContent = gameState.storySoFar;
-        lastDecisionElement.textContent = gameState.lastDecision;
-        currentSituationElement.textContent = gameState.currentSituation;
-        optionsElement.innerHTML = gameState.options.map((option, index) => 
-            `<li onclick="vote(${index})">${option}</li>`
-        ).join('');
-    });
+        const storySoFarElement = document.getElementById('storySoFar');
+        const currentSituationElement = document.getElementById('currentSituation');
+        const gameImageElement = document.getElementById('gameImage');
+        const lastDecisionElement = document.getElementById('lastDecision');
+        const optionsElement = document.getElementById('options');
+        const timerElement = document.getElementById('timer');
 
-    socket.on('updateTimer', (time) => {
-        timerElement.textContent = `Time remaining: ${time} seconds`;
-    });
+        socket.on('updateGameState', (gameState) => {
+            storySoFarElement.textContent = gameState.storySoFar;
+            currentSituationElement.textContent = gameState.currentSituation;
+            gameImageElement.src = gameState.currentImage;
+            lastDecisionElement.textContent = gameState.lastDecision;
+            optionsElement.innerHTML = gameState.options.map((option, index) => 
+                `<li onclick="vote(${index})">${option}</li>`
+            ).join('');
+        });
 
-    socket.on('gameOver', () => {
-        optionsElement.innerHTML = '<li>Game Over</li>';
-        timerElement.textContent = '';
-    });
+        socket.on('updateTimer', (time) => {
+            timerElement.textContent = `Time remaining: ${time} seconds`;
+        });
 
-    function vote(optionIndex) {
-        socket.emit('vote', optionIndex);
-    }
-</script>
+        socket.on('gameOver', () => {
+            optionsElement.innerHTML = '<li>Game Over</li>';
+            timerElement.textContent = '';
+        });
+
+        function vote(optionIndex) {
+            socket.emit('vote', optionIndex);
+        }
+    </script>
 </body>
 </html>
