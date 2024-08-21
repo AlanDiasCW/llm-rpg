@@ -13,7 +13,9 @@ apiKey: process.env.ANTHROPIC_API_KEY,
 });
 app.use(express.static(path.join(__dirname, 'public')));
 let gameState = {
-story: '',
+storySoFar: '',
+lastDecision: '',
+currentSituation: '',
 options: [],
 votes: {},
 players: new Set(),
@@ -31,12 +33,14 @@ content: 'Generate a short initial scenario for a text-based RPG game. Include t
 ],
 });
 const result = response.content[0].text.trim().split('\n');
-gameState.story = result[0];
+gameState.currentSituation = result[0];
 gameState.options = result.slice(1).map(option => option.replace(/^\d+.\s*/, ''));
 }
 async function generateNextStep(chosenOption) {
 const prompt = `
-Current story: ${gameState.story}
+Story so far: ${gameState.storySoFar}
+Last decision: ${gameState.lastDecision}
+Current situation: ${gameState.currentSituation}
 Player chose: ${chosenOption}
 Continue the story based on this choice and provide three new options for the player.
 Ensure the new part of the story is no more than two sentences long.
@@ -53,13 +57,17 @@ content: prompt
 ],
 });
 const result = response.content[0].text.trim().split('\n');
-const newStoryPart = result[0];
-if (newStoryPart.toLowerCase().includes('game over')) {
-gameState.story += `\n\n${newStoryPart}`;
+const newSituation = result[0];
+if (newSituation.toLowerCase().includes('game over')) {
+gameState.storySoFar += `\n${gameState.currentSituation}`;
+gameState.lastDecision = chosenOption;
+gameState.currentSituation = newSituation;
 gameState.options = ['Game Over'];
 return false;
 } else {
-gameState.story += `\n\n${newStoryPart}`;
+gameState.storySoFar += `\n${gameState.currentSituation}`;
+gameState.lastDecision = chosenOption;
+gameState.currentSituation = newSituation;
 gameState.options = result.slice(1).map(option => option.replace(/^\d+.\s*/, ''));
 return true;
 }
