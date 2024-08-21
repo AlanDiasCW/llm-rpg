@@ -1,12 +1,16 @@
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
 const path = require('path');
-const axios = require('axios');
+const Anthropic = require('@anthropic-ai/sdk');
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 const PORT = 3000;
+const anthropic = new Anthropic({
+apiKey: process.env.ANTHROPIC_API_KEY,
+});
 app.use(express.static(path.join(__dirname, 'public')));
 let gameState = {
 story: '',
@@ -15,7 +19,52 @@ votes: {},
 players: new Set(),
 timer: null,
 };
-function startNewRound() {
+async function generateInitialStory() {
+const response = await anthropic.messages.create({
+model: 'claude-3-sonnet-20240229',
+max_tokens: 300,
+messages: [
+{
+role: 'user',
+content: 'Generate a short initial scenario for a text-based RPG game. Include three options for the player to choose from.'
+}
+],
+});
+const result = response.content[0].text.trim().split('\n');
+gameState.story = result[0];
+gameState.options = result.slice(1).map(option => option.replace(/^\d+.\s*/, ''));
+}
+async function generateNextStep(chosenOption) {
+const prompt = `
+Current story: ${gameState.story}
+Player chose: ${chosenOption}
+Continue the story based on this choice and provide three new options for the player.
+Ensure the new part of the story is no more than two sentences long.
+If the chosen option would result in the player's death, end the story and indicate that the game is over.
+`;
+const response = await anthropic.messages.create({
+model: 'claude-3-sonnet-20240229',
+max_tokens: 300,
+messages: [
+{
+role: 'user',
+content: prompt
+}
+],
+});
+const result = response.content[0].text.trim().split('\n');
+const newStoryPart = result[0];
+if (newStoryPart.toLowerCase().includes('game over')) {
+gameState.story += `\n\n${newStoryPart}`;
+gameState.options = ['Game Over'];
+return false;
+} else {
+gameState.story += `\n\n${newStoryPart}`;
+gameState.options = result.slice(1).map(option => option.replace(/^\d+.\s*/, ''));
+return true;
+}
+}
+async function startNewRound() {
 gameState.votes = {};
 gameState.timer = 45;
 io.emit('updateGameState', gameState);
@@ -28,19 +77,21 @@ if (gameState.timer <= 0) {
 }
 }, 1000);
 }
-function processVotes() {
+async function processVotes() {
 const voteCounts = Object.values(gameState.votes).reduce((acc, vote) => {
 acc[vote] = (acc[vote] || 0) + 1;
 return acc;
 }, {});
 const winningOption = Object.keys(voteCounts).reduce((a, b) =>
-voteCounts[a] > voteCounts[b] ? a : b
+voteCounts[a] > voteCounts[b] ? a : b, '0'
 );
-// Here you would call Claude API to get the next part of the story
-// For now, we'll just use a placeholder
-gameState.story += `\n\nOption ${winningOption} was chosen.`;
-gameState.options = ['Continue the adventure', 'Rest for a while', 'Explore the surroundings'];
+const chosenOption = gameState.options[winningOption];
+const gameContinues = await generateNextStep(chosenOption);
+if (gameState.options.includes('Game Over') || !gameState.options.length) {
+io.emit('gameOver');
+} else if (gameState.players.size > 0) {
 startNewRound();
+}
 }
 io.on('connection', (socket) => {
 console.log('A user connected');
@@ -54,10 +105,11 @@ gameState.votes[socket.id] = option;
 });
 socket.emit('updateGameState', gameState);
 });
-// Start the initial round
-gameState.story = "You find yourself at the entrance of a dark cave. What do you do?";
-gameState.options = ['Enter the cave', 'Look for another way', 'Set up camp outside'];
+async function initGame() {
+await generateInitialStory();
 startNewRound();
+}
 server.listen(PORT, () => {
 console.log(`Server is running on http://localhost:${PORT}`);
+initGame();
 });

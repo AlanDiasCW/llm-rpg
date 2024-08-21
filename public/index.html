@@ -30,24 +30,30 @@
 <script src="/socket.io/socket.io.js"></script>
 <script>
     const socket = io();
-const storyElement = document.getElementById('story');
-const optionsElement = document.getElementById('options');
-const timerElement = document.getElementById('timer');
 
-socket.on('updateGameState', (gameState) => {
-    storyElement.textContent = gameState.story;
-    optionsElement.innerHTML = gameState.options.map((option, index) => 
-        `<li onclick="vote(${index})">${option}</li>`
-    ).join('');
-});
+    const storyElement = document.getElementById('story');
+    const optionsElement = document.getElementById('options');
+    const timerElement = document.getElementById('timer');
 
-socket.on('updateTimer', (time) => {
-    timerElement.textContent = `Time remaining: ${time} seconds`;
-});
+    socket.on('updateGameState', (gameState) => {
+        storyElement.textContent = gameState.story;
+        optionsElement.innerHTML = gameState.options.map((option, index) => 
+            `<li onclick="vote(${index})">${option}</li>`
+        ).join('');
+    });
 
-function vote(optionIndex) {
-    socket.emit('vote', optionIndex);
-}
+    socket.on('updateTimer', (time) => {
+        timerElement.textContent = `Time remaining: ${time} seconds`;
+    });
+
+    socket.on('gameOver', () => {
+        optionsElement.innerHTML = '<li>Game Over</li>';
+        timerElement.textContent = '';
+    });
+
+    function vote(optionIndex) {
+        socket.emit('vote', optionIndex);
+    }
 </script>
 </body>
 </html>
