@@ -32,6 +32,10 @@ let gameState = {
   players: new Set(),
   timer: null,
   currentImage: '',
+  player: {
+    hp: 100,
+    maxHp: 100
+  }
 };
 
 async function generateImage(prompt) {
@@ -54,15 +58,18 @@ async function generateOutcome(option) {
 Story so far: ${gameState.storySoFar}
 Last decision: ${gameState.lastDecision}
 Current situation: ${gameState.currentSituation}
+Player HP: ${gameState.player.hp}/${gameState.player.maxHp}
 
 Player chose: ${option}
 
-Continue the story based on this choice and provide exactly three new options for the player.
+Continue the story based on this choice. Occasionally include events that affect the player's HP.
+Provide exactly three new options for the player to choose from.
 Ensure the new part of the story is no more than two sentences long.
-If the chosen option would result in the player's death, end the story and indicate that the game is over.
+If the player's HP reaches 0, end the story and indicate that the game is over.
 
 Format your response as follows:
 New situation: [Your new situation here]
+Player HP: [Updated player HP]
 Options:
 1. [First option]
 2. [Second option]
@@ -84,21 +91,20 @@ Game over: [Your game over message here]
   });
 
   const result = response.content[0].text.trim().split('\n');
-  const situationIndex = result.findIndex(line => line.startsWith('New situation:'));
-  const optionsIndex = result.findIndex(line => line.startsWith('Options:'));
-
-  let newSituation, newOptions;
+  let newSituation, newOptions, newPlayerHp;
 
   if (result[0].toLowerCase().startsWith('game over:')) {
     newSituation = result[0];
     newOptions = ['Game Over'];
-  } else if (situationIndex !== -1 && optionsIndex !== -1) {
-    newSituation = result[situationIndex].replace('New situation:', '').trim();
-    newOptions = result.slice(optionsIndex + 1).map(option => option.replace(/^\d+\.\s*/, '').trim()).filter(option => option !== '');
+    newPlayerHp = 0;
   } else {
-    console.error('Unexpected response format from Claude');
-    newSituation = 'Error generating next step';
-    newOptions = [];
+    const situationIndex = result.findIndex(line => line.startsWith('New situation:'));
+    const playerHpIndex = result.findIndex(line => line.startsWith('Player HP:'));
+    const optionsIndex = result.findIndex(line => line.startsWith('Options:'));
+
+    newSituation = result[situationIndex].replace('New situation:', '').trim();
+    newPlayerHp = parseInt(result[playerHpIndex].split(':')[1].trim());
+    newOptions = result.slice(optionsIndex + 1).map(option => option.replace(/^\d+\.\s*/, '').trim()).filter(option => option !== '');
   }
 
   while (newOptions.length < 3 && !newOptions.includes('Game Over')) {
@@ -109,7 +115,7 @@ Game over: [Your game over message here]
   const imagePrompt = `point of view perspective, create a simple image: ${newSituation}`;
   const imageUrl = await generateImage(imagePrompt);
 
-  return { newSituation, newOptions, imageUrl };
+  return { newSituation, newOptions, imageUrl, newPlayerHp };
 }
 
 async function preloadOutcomes() {
@@ -177,13 +183,15 @@ function moveToNextStep(chosenOption) {
   gameState.currentSituation = outcome.newSituation;
   gameState.options = outcome.newOptions;
   gameState.currentImage = outcome.imageUrl;
+  gameState.player.hp = outcome.newPlayerHp;
 
   console.log('Moved to next step:');
   console.log('Current situation:', gameState.currentSituation);
   console.log('Options:', gameState.options);
   console.log('Current image:', gameState.currentImage);
+  console.log('Player HP:', gameState.player.hp);
 
-  if (gameState.options.includes('Game Over')) {
+  if (gameState.options.includes('Game Over') || gameState.player.hp <= 0) {
     return false;
   }
 
