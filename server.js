@@ -27,7 +27,7 @@ let gameState = {
   lastDecision: '',
   currentSituation: '',
   options: [],
-  nextOutcomes: {}, // Will store preloaded outcomes for each option
+  nextOutcomes: {},
   votes: {},
   players: new Set(),
   timer: null,
@@ -195,23 +195,23 @@ function moveToNextStep(chosenOption) {
 }
 
 async function startNewRound() {
-  gameState.votes = {};
-  gameState.timer = 45;
-  io.emit('updateGameState', gameState);
-  
-  const timerInterval = setInterval(() => {
-    gameState.timer--;
-    io.emit('updateTimer', gameState.timer);
+    gameState.votes = {};
+    gameState.timer = 30;  // Changed from 45 to 30
+    io.emit('updateGameState', gameState);
     
-    if (gameState.timer <= 0) {
-      clearInterval(timerInterval);
-      processVotes();
-    }
-  }, 1000);
-
-  // Preload outcomes for the new options asynchronously
-  preloadOutcomes().catch(console.error);
-}
+    const timerInterval = setInterval(() => {
+      gameState.timer--;
+      io.emit('updateTimer', gameState.timer);
+      
+      if (gameState.timer <= 0) {
+        clearInterval(timerInterval);
+        processVotes();
+      }
+    }, 1000);
+  
+    // Preload outcomes for the new options asynchronously
+    preloadOutcomes().catch(console.error);
+  }
 
 function processVotes() {
   console.log('Processing votes:');
@@ -249,13 +249,16 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log('A user disconnected. Socket ID:', socket.id);
     gameState.players.delete(socket.id);
+    delete gameState.votes[socket.id];
     console.log('Current players:', Array.from(gameState.players));
+    io.emit('updateVotes', gameState.votes);
   });
 
   socket.on('vote', (option) => {
     console.log(`Vote received from ${socket.id}: Option ${option}`);
     gameState.votes[socket.id] = option;
     console.log('Current votes:', gameState.votes);
+    io.emit('updateVotes', gameState.votes);
   });
 
   socket.emit('updateGameState', gameState);

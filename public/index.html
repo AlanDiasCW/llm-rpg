@@ -58,18 +58,13 @@
             border-radius: 10px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
             margin-bottom: 20px;
-            max-height: 300px; /* Adjust this value as needed */
+            max-height: 300px;
             object-fit: contain;
-        }
-        .options-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
         }
         #options {
             list-style-type: none;
             padding: 0;
+            margin-top: 20px;
         }
         #options li {
             margin-bottom: 10px;
@@ -78,13 +73,47 @@
             border-radius: 5px;
             cursor: pointer;
             transition: background-color 0.3s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
         #options li:hover {
             background-color: #d9d9d9;
         }
-        #timer {
+        .vote-count {
+            background-color: #4CAF50;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.8em;
+            min-width: 20px;
+            text-align: center;
+        }
+        #timerBar {
+            width: 100%;
+            height: 30px;
+            background-color: #e0e0e0;
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+            margin-bottom: 20px;
+        }
+        #timerFill {
+            width: 100%;
+            height: 100%;
+            background-color: #4CAF50;
+            transition: width 1s linear;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #timerText {
+            position: absolute;
+            width: 100%;
+            text-align: center;
+            color: #000;
             font-weight: bold;
-            color: #666;
+            mix-blend-mode: difference;
         }
     </style>
 </head>
@@ -103,9 +132,9 @@
         <div class="main-game">
             <div id="currentSituation" class="story-section"></div>
             <img id="gameImage" alt="Game Scenario">
-            <div class="options-header">
-                <h2>Options</h2>
-                <div id="timer"></div>
+            <div id="timerBar">
+                <div id="timerFill"></div>
+                <div id="timerText"></div>
             </div>
             <ul id="options"></ul>
         </div>
@@ -120,25 +149,62 @@
         const gameImageElement = document.getElementById('gameImage');
         const lastDecisionElement = document.getElementById('lastDecision');
         const optionsElement = document.getElementById('options');
-        const timerElement = document.getElementById('timer');
+        const timerFillElement = document.getElementById('timerFill');
+        const timerTextElement = document.getElementById('timerText');
+
+        let currentOptions = [];
+
+        function updateVoteCounts(votes) {
+            const voteCounts = currentOptions.map((_, index) => 
+                Object.values(votes).filter(vote => vote == index).length
+            );
+            
+            const voteCountElements = document.querySelectorAll('.vote-count');
+            voteCountElements.forEach((element, index) => {
+                element.textContent = voteCounts[index];
+            });
+        }
 
         socket.on('updateGameState', (gameState) => {
             storySoFarElement.textContent = gameState.storySoFar;
             currentSituationElement.textContent = gameState.currentSituation;
             gameImageElement.src = gameState.currentImage;
             lastDecisionElement.textContent = gameState.lastDecision;
+            
+            currentOptions = gameState.options;
+            
             optionsElement.innerHTML = gameState.options.map((option, index) => 
-                `<li onclick="vote(${index})">${option}</li>`
+                `<li onclick="vote(${index})">
+                    <span>${option}</span>
+                    <span class="vote-count">0</span>
+                 </li>`
             ).join('');
+
+            updateVoteCounts(gameState.votes);
+        });
+
+        socket.on('updateVotes', (votes) => {
+            updateVoteCounts(votes);
         });
 
         socket.on('updateTimer', (time) => {
-            timerElement.textContent = `Time remaining: ${time} seconds`;
+            const percentage = (time / 45) * 100;
+            timerFillElement.style.width = `${percentage}%`;
+            timerTextElement.textContent = `${time} seconds`;
+            
+            if (percentage < 30) {
+                timerFillElement.style.backgroundColor = '#FF4136';
+            } else if (percentage < 60) {
+                timerFillElement.style.backgroundColor = '#FFDC00';
+            } else {
+                timerFillElement.style.backgroundColor = '#4CAF50';
+            }
         });
 
         socket.on('gameOver', () => {
             optionsElement.innerHTML = '<li>Game Over</li>';
-            timerElement.textContent = '';
+            timerFillElement.style.width = '0%';
+            timerTextElement.textContent = '';
         });
 
         function vote(optionIndex) {
