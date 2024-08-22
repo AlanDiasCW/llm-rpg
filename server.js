@@ -192,7 +192,7 @@ function moveToNextStep(chosenOption) {
 
 function startNewRound() {
   gameState.votes = {};
-  gameState.timer = 20; // Changed from 30 to 20 seconds
+  gameState.timer = 25; // Changed from 30 to 20 seconds
   io.emit('updateGameState', gameState);
   
   const timerInterval = setInterval(() => {
