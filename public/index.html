@@ -10,27 +10,39 @@
             margin: 0;
             padding: 20px;
             background-color: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
         }
         .game-container {
             display: flex;
             max-width: 1200px;
-            margin: 0 auto;
+            width: 100%;
             background-color: white;
             border-radius: 10px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            overflow: hidden;
         }
-        .story-so-far {
+        .story-column {
             width: 30%;
             padding: 20px;
             border-right: 1px solid #e0e0e0;
+            display: flex;
+            flex-direction: column;
+        }
+        .story-so-far {
+            flex-grow: 1;
             overflow-y: auto;
-            max-height: 80vh;
+            margin-bottom: 20px;
         }
         .main-game {
             width: 70%;
             padding: 20px;
+            display: flex;
+            flex-direction: column;
         }
-        h1, h2 {
+        h2 {
             color: #333;
             margin-top: 0;
         }
@@ -46,6 +58,8 @@
             border-radius: 10px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
             margin-bottom: 20px;
+            max-height: 300px; /* Adjust this value as needed */
+            object-fit: contain;
         }
         .options-header {
             display: flex;
@@ -76,21 +90,19 @@
 </head>
 <body>
     <div class="game-container">
-        <div class="story-so-far">
-            <h2>Story So Far</h2>
-            <div id="storySoFar"></div>
-        </div>
-        <div class="main-game">
-            <h1>RPG Game</h1>
-            <div class="story-section">
-                <h2>Current Situation</h2>
-                <div id="currentSituation"></div>
+        <div class="story-column">
+            <div class="story-so-far">
+                <h2>Story So Far</h2>
+                <div id="storySoFar"></div>
             </div>
-            <img id="gameImage" alt="Game Scenario">
             <div class="story-section">
                 <h2>Last Decision</h2>
                 <div id="lastDecision"></div>
             </div>
+        </div>
+        <div class="main-game">
+            <div id="currentSituation" class="story-section"></div>
+            <img id="gameImage" alt="Game Scenario">
             <div class="options-header">
                 <h2>Options</h2>
                 <div id="timer"></div>
