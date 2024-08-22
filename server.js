@@ -106,7 +106,7 @@ Game over: [Your game over message here]
   }
   newOptions = newOptions.slice(0, 3);
 
-  const imagePrompt = `Create a simple image for a text-based RPG game scenario: ${newSituation}`;
+  const imagePrompt = `point of view perspective, create a simple image: ${newSituation}`;
   const imageUrl = await generateImage(imagePrompt);
 
   return { newSituation, newOptions, imageUrl };
