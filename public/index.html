@@ -23,6 +23,7 @@
             border-radius: 10px;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
             overflow: hidden;
+            display: none;  /* Hide the game container initially */
         }
         .story-column {
             width: 30%;
@@ -115,9 +116,63 @@
             font-weight: bold;
             mix-blend-mode: difference;
         }
+
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+
+        #loadingScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #1a1a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .loader-container {
+            display: flex;
+            align-items: center;
+        }
+
+        .loader {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: 4px solid transparent;
+            border-top: 4px solid #7cfc00;
+            border-right: 4px solid #32cd32;
+            border-bottom: 4px solid #00ff00;
+            animation: spin 1s linear infinite;
+            margin-right: 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            font-family: 'Roboto', sans-serif;
+            font-size: 48px;
+            color: #ffffff;
+        }
+
+        .loading-text span {
+            font-weight: 700;
+        }
     </style>
 </head>
 <body>
+    <div id="loadingScreen">
+        <div class="loader-container">
+            <div class="loader"></div>
+            <div class="loading-text">infinite<span>verse</span></div>
+        </div>
+    </div>
+
     <div class="game-container">
         <div class="story-column">
             <div class="story-so-far">
@@ -144,6 +199,8 @@
     <script>
         const socket = io();
 
+        const loadingScreenElement = document.getElementById('loadingScreen');
+        const gameContainerElement = document.querySelector('.game-container');
         const storySoFarElement = document.getElementById('storySoFar');
         const currentSituationElement = document.getElementById('currentSituation');
         const gameImageElement = document.getElementById('gameImage');
@@ -163,6 +220,30 @@
             voteCountElements.forEach((element, index) => {
                 element.textContent = voteCounts[index];
             });
+        }
+
+        socket.on('gameReady', (gameState) => {
+            loadingScreenElement.style.display = 'none';
+            gameContainerElement.style.display = 'flex';
+            updateGameState(gameState);
+        });
+
+        function updateGameState(gameState) {
+            storySoFarElement.textContent = gameState.storySoFar;
+            currentSituationElement.textContent = gameState.currentSituation;
+            gameImageElement.src = gameState.currentImage;
+            lastDecisionElement.textContent = gameState.lastDecision;
+            
+            currentOptions = gameState.options;
+            
+            optionsElement.innerHTML = gameState.options.map((option, index) => 
+                `<li onclick="vote(${index})">
+                    <span>${option}</span>
+                    <span class="vote-count">0</span>
+                 </li>`
+            ).join('');
+
+            updateVoteCounts(gameState.votes);
         }
 
         socket.on('updateGameState', (gameState) => {

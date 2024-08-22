@@ -240,6 +240,11 @@ io.on('connection', (socket) => {
   gameState.players.add(socket.id);
   console.log('Current players:', Array.from(gameState.players));
 
+  // Send current game state if the game has already started
+  if (gameState.currentSituation) {
+    socket.emit('gameReady', gameState);
+  }
+
   socket.on('disconnect', () => {
     console.log('A user disconnected. Socket ID:', socket.id);
     gameState.players.delete(socket.id);
@@ -260,6 +265,7 @@ io.on('connection', (socket) => {
 
 async function initGame() {
   await generateInitialStory();
+  io.emit('gameReady', gameState);  // Emit gameReady event with initial game state
   startNewRound();
 }
 
