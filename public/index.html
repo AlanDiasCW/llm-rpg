@@ -188,7 +188,7 @@
         });
 
         socket.on('updateTimer', (time) => {
-            const percentage = (time /30) * 100;
+            const percentage = (time / 20) * 100; // Changed from 30 to 20
             timerFillElement.style.width = `${percentage}%`;
             timerTextElement.textContent = `${time} seconds`;
         });
