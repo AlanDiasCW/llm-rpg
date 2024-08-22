@@ -268,10 +268,32 @@ io.on('connection', (socket) => {
     io.emit('updateVotes', gameState.votes);
   });
 
+  socket.on('restartGame', () => {
+    console.log('Restarting game...');
+    initGame();
+  });
+
   socket.emit('updateGameState', gameState);
 });
 
 async function initGame() {
+  // Reset game state
+  gameState = {
+    storySoFar: '',
+    lastDecision: '',
+    currentSituation: '',
+    options: [],
+    nextOutcomes: {},
+    votes: {},
+    players: new Set(),
+    timer: null,
+    currentImage: '',
+    player: {
+      hp: 100,
+      maxHp: 100
+    }
+  };
+
   await generateInitialStory();
   io.emit('gameReady', gameState);  // Emit gameReady event with initial game state
   startNewRound();

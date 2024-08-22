@@ -306,10 +306,19 @@
         });
 
         socket.on('gameOver', () => {
-            optionsElement.innerHTML = '<li>Game Over</li>';
+            optionsElement.innerHTML = `
+                <li>Game Over</li>
+                <li id="playAgainButton" onclick="restartGame()">Play Again</li>
+            `;
             timerFillElement.style.width = '0%';
             timerTextElement.textContent = '';
         });
+
+        function restartGame() {
+            loadingScreenElement.style.display = 'flex';
+            gameContainerElement.style.display = 'none';
+            socket.emit('restartGame');
+        }
 
         function vote(optionIndex) {
             socket.emit('vote', optionIndex);
