@@ -101,13 +101,11 @@ Game over: [Your game over message here]
     newOptions = [];
   }
 
-  // Ensure we always have exactly 3 non-empty options
   while (newOptions.length < 3 && !newOptions.includes('Game Over')) {
     newOptions.push(`Fallback option ${newOptions.length + 1}`);
   }
   newOptions = newOptions.slice(0, 3);
 
-  // Generate image for the new situation
   const imagePrompt = `Create a simple image for a text-based RPG game scenario: ${newSituation}`;
   const imageUrl = await generateImage(imagePrompt);
 
@@ -160,7 +158,6 @@ async function generateInitialStory() {
   }
   gameState.options = gameState.options.slice(0, 3);
 
-  // Generate image for the initial scenario
   const imagePrompt = `Create a simple image for a text-based RPG game scenario: ${gameState.currentSituation}`;
   gameState.currentImage = await generateImage(imagePrompt);
 
@@ -169,7 +166,6 @@ async function generateInitialStory() {
   console.log('Options:', gameState.options);
   console.log('Current image:', gameState.currentImage);
 
-  // Preload outcomes for initial options
   await preloadOutcomes();
 }
 
@@ -194,28 +190,26 @@ function moveToNextStep(chosenOption) {
   return true;
 }
 
-async function startNewRound() {
-    gameState.votes = {};
-    gameState.timer = 30;  // Changed from 45 to 30
-    io.emit('updateGameState', gameState);
-    
-    const timerInterval = setInterval(() => {
-      gameState.timer--;
-      io.emit('updateTimer', gameState.timer);
-      
-      if (gameState.timer <= 0) {
-        clearInterval(timerInterval);
-        processVotes();
-      }
-    }, 1000);
+function startNewRound() {
+  gameState.votes = {};
+  gameState.timer = 30;
+  io.emit('updateGameState', gameState);
   
-    // Preload outcomes for the new options asynchronously
-    preloadOutcomes().catch(console.error);
-  }
+  const timerInterval = setInterval(() => {
+    gameState.timer--;
+    io.emit('updateTimer', gameState.timer);
+    
+    if (gameState.timer <= 0) {
+      clearInterval(timerInterval);
+      processVotes();
+    }
+  }, 1000);
+
+  preloadOutcomes().catch(console.error);
+}
 
 function processVotes() {
-  console.log('Processing votes:');
-  console.log('Current votes:', gameState.votes);
+  console.log('Processing votes:', gameState.votes);
 
   const voteCounts = Object.values(gameState.votes).reduce((acc, vote) => {
     acc[vote] = (acc[vote] || 0) + 1;
