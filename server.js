@@ -201,11 +201,17 @@ async function generateInitialStory() {
 }
 
 function moveToNextStep(chosenOption) {
-  // Check for the golden capybara win condition before generating the next outcome
+  // Check for the golden capybara win condition
   if (gameState.goldenCapybaraEncountered && gameState.options[chosenOption].toLowerCase().includes('pet') && gameState.options[chosenOption].toLowerCase().includes('golden capybara')) {
     console.log('Win condition met! Player pet the golden capybara.');
+    const outcome = gameState.nextOutcomes[chosenOption];
+    
+    gameState.storySoFar += `\n${gameState.currentSituation}`;
+    gameState.lastDecision = gameState.options[chosenOption];
     gameState.currentSituation = "As you pet the golden capybara, the world around you begins to dissolve. You realize you've been in a simulation all along, and you've just found the way out. Congratulations, you've won the game!";
     gameState.options = ['Game Over - You Win!'];
+    gameState.currentImage = outcome.imageUrl; // Use the preloaded image URL
+    
     io.emit('updateGameState', gameState);
     io.emit('gameOver', 'win');
     return false;

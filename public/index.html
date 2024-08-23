@@ -395,7 +395,7 @@
                 gameState.currentSituation.toLowerCase().includes('congratulations') && 
                 gameState.currentSituation.toLowerCase().includes('won the game')) {
                 console.log('Win condition detected in game state');
-                handleWinCondition();
+                handleWinCondition(gameState);
                 return;
             }
             
@@ -442,12 +442,14 @@
             timerTextElement.textContent = '';
         });
 
-        function handleWinCondition() {
+        function handleWinCondition(gameState) {
             console.log('Handling win condition');
             optionsElement.innerHTML = `
                 <li>Congratulations! You've escaped the simulation!</li>
                 <li id="playAgainButton" onclick="restartGame()">Play Again</li>
             `;
+            // Ensure the final image is displayed
+            gameImageElement.src = gameState.currentImage;
             // You can add more visual effects or animations here to celebrate the win
         }
 
