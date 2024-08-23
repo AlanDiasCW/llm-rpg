@@ -149,6 +149,7 @@
 
         .loader-container {
             display: flex;
+            flex-direction: column;
             align-items: center;
         }
 
@@ -161,7 +162,7 @@
             border-right: 4px solid #32cd32;
             border-bottom: 4px solid #00ff00;
             animation: spin 1s linear infinite;
-            margin-right: 20px;
+            margin-bottom: 20px;
         }
 
         @keyframes spin {
@@ -173,10 +174,33 @@
             font-family: 'Roboto', sans-serif;
             font-size: 48px;
             color: #ffffff;
+            margin-bottom: 20px;
         }
 
         .loading-text span {
             font-weight: 700;
+        }
+
+        #playButton {
+            font-family: 'Roboto', sans-serif;
+            font-size: 20px; /* Reduced from 24px */
+            font-weight: 700;
+            color: #ffffff;
+            background-color: #32cd32;
+            border: none;
+            border-radius: 5px;
+            padding: 13px 34px; /* Reduced from 15px 40px */
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        #playButton:hover {
+            background-color: #28a428;
+        }
+
+        #playButton:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(124, 252, 0, 0.5);
         }
     </style>
 </head>
@@ -191,6 +215,7 @@
         <div class="loader-container">
             <div class="loader"></div>
             <div class="loading-text">infinite<span>verse</span></div>
+            <button id="playButton" style="display: none;">Play</button>
         </div>
     </div>
 
@@ -329,10 +354,23 @@
             }
         });
 
+        let gameLoaded = false;
+        const playButton = document.getElementById('playButton');
+
         socket.on('gameReady', (gameState) => {
-            loadingScreenElement.style.display = 'none';
-            gameContainerElement.style.display = 'flex';
+            gameLoaded = true;
+            playButton.style.display = 'block';
             updateGameState(gameState);
+        });
+
+        playButton.addEventListener('click', () => {
+            if (gameLoaded) {
+                loadingScreenElement.style.display = 'none';
+                gameContainerElement.style.display = 'flex';
+                socket.emit('startGame');
+            } else {
+                console.log('Game is still loading. Please wait.');
+            }
         });
 
         function updateGameState(gameState) {

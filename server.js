@@ -327,7 +327,6 @@ async function initGame() {
   try {
     await generateInitialStory();
     io.emit('gameReady', { ...gameState, musicFileName });  // Include musicFileName in the gameReady event
-    startNewRound();
   } catch (error) {
     console.error("Error initializing game:", error);
     gameState.currentSituation = "An error occurred while starting the game. Please try again.";
@@ -373,6 +372,11 @@ io.on('connection', (socket) => {
   socket.on('restartGame', () => {
     console.log('Restarting game...');
     initGame();
+  });
+
+  socket.on('startGame', () => {
+    console.log('Starting game for player:', socket.id);
+    startNewRound();
   });
 
   socket.emit('updateGameState', gameState);
