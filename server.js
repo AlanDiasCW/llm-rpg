@@ -55,81 +55,91 @@ async function generateImage(prompt) {
 }
 
 async function generateOutcome(option) {
-  const prompt = `
-Story so far: ${gameState.storySoFar}
-Last decision: ${gameState.lastDecision}
-Current situation: ${gameState.currentSituation}
-Player HP: ${gameState.player.hp}/${gameState.player.maxHp}
+  try {
+    const prompt = `
+    Story so far: ${gameState.storySoFar}
+    Last decision: ${gameState.lastDecision}
+    Current situation: ${gameState.currentSituation}
+    Player HP: ${gameState.player.hp}/${gameState.player.maxHp}
 
-Player chose: ${option}
+    Player chose: ${option}
 
-Continue the story based on this choice. 
-Occasionally include events that affect the player's HP.
-Provide exactly three new options for the player to choose from.
-Ensure the new part of the story is no more than two sentences long.
-If the player's HP reaches 0, end the story and indicate that the game is over.
+    Continue the story based on this choice. 
+    Occasionally include events that affect the player's HP.
+    Provide exactly three new options for the player to choose from.
+    Ensure the new part of the story is no more than two sentences long.
+    If the player's HP reaches 0, end the story and indicate that the game is over.
 
-${!gameState.goldenCapybaraEncountered ? "There's a small chance (about 5%) that the player encounters a mysterious golden capybara. If this happens, make sure one of the options is to pet it." : ""}
+    ${!gameState.goldenCapybaraEncountered ? "There's a small chance (about 5%) that the player encounters a mysterious golden capybara. If this happens, make sure one of the options is to pet it." : ""}
 
-${gameState.goldenCapybaraEncountered && option.toLowerCase().includes('pet') && option.toLowerCase().includes('golden capybara') ? 
-  "The player has chosen to pet the golden capybara. This is a special win condition. End the game with a message about the player escaping the simulation." : 
-  ""}
+    ${gameState.goldenCapybaraEncountered && option.toLowerCase().includes('pet') && option.toLowerCase().includes('golden capybara') ? 
+      "The player has chosen to pet the golden capybara. This is a special win condition. End the game with a message about the player escaping the simulation." : 
+      ""}
 
-Format your response as follows:
-New situation: [Your new situation here]
-Player HP: [Updated player HP]
-Options:
-1. [First option]
-2. [Second option]
-3. [Third option]
+    Format your response as follows:
+    New situation: [Your new situation here]
+    Player HP: [Updated player HP]
+    Options:
+    1. [First option]
+    2. [Second option]
+    3. [Third option]
 
-If it's a game over scenario, just respond with:
-Game over: [Your game over message here]
-`;
+    If it's a game over scenario, just respond with:
+    Game over: [Your game over message here]
+    `;
 
-  const response = await anthropic.messages.create({
-    model: 'claude-3-sonnet-20240229',
-    max_tokens: 300,
-    messages: [
-      {
-        role: 'user',
-        content: prompt
-      }
-    ],
-  });
+    const response = await anthropic.messages.create({
+      model: 'claude-3-sonnet-20240229',
+      max_tokens: 300,
+      messages: [
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+    });
 
-  const result = response.content[0].text.trim().split('\n');
-  let newSituation, newOptions, newPlayerHp;
+    const content = response.content[0].text.trim().split('\n');
+    let newSituation, newOptions, newPlayerHp;
 
-  if (result[0].toLowerCase().startsWith('game over:')) {
-    newSituation = result[0];
-    newOptions = ['Game Over'];
-    newPlayerHp = 0;
-  } else {
-    const situationIndex = result.findIndex(line => line.startsWith('New situation:'));
-    const playerHpIndex = result.findIndex(line => line.startsWith('Player HP:'));
-    const optionsIndex = result.findIndex(line => line.startsWith('Options:'));
+    if (content[0].toLowerCase().startsWith('game over:')) {
+      newSituation = content[0];
+      newOptions = ['Game Over'];
+      newPlayerHp = 0;
+    } else {
+      const situationIndex = content.findIndex(line => line.startsWith('New situation:'));
+      const playerHpIndex = content.findIndex(line => line.startsWith('Player HP:'));
+      const optionsIndex = content.findIndex(line => line.startsWith('Options:'));
 
-    newSituation = result[situationIndex].replace('New situation:', '').trim();
-    newPlayerHp = parseInt(result[playerHpIndex].split(':')[1].trim());
-    newOptions = result.slice(optionsIndex + 1).map(option => option.replace(/^\d+\.\s*/, '').trim()).filter(option => option !== '');
+      newSituation = content[situationIndex].replace('New situation:', '').trim();
+      newPlayerHp = parseInt(content[playerHpIndex].split(':')[1].trim());
+      newOptions = content.slice(optionsIndex + 1).map(option => option.replace(/^\d+\.\s*/, '').trim()).filter(option => option !== '');
+    }
+
+    while (newOptions.length < 3 && !newOptions.includes('Game Over')) {
+      newOptions.push(`Fallback option ${newOptions.length + 1}`);
+    }
+    newOptions = newOptions.slice(0, 3);
+
+    const imagePrompt = `point of view perspective, create a simple image: ${newSituation}`;
+    const imageUrl = await generateImage(imagePrompt);
+
+    // After processing the AI response, check if the golden capybara was introduced
+    if (newSituation.toLowerCase().includes('golden capybara')) {
+      gameState.goldenCapybaraEncountered = true;
+      console.log('Golden capybara encountered!');
+    }
+
+    return { newSituation, newOptions, imageUrl, newPlayerHp };
+  } catch (error) {
+    console.error("Error in generateOutcome:", error);
+    return {
+      newSituation: "An unexpected error occurred. Please try again.",
+      newOptions: ["Restart the game"],
+      newPlayerHp: gameState.player.hp,
+      imageUrl: gameState.currentImage
+    };
   }
-
-  while (newOptions.length < 3 && !newOptions.includes('Game Over')) {
-    newOptions.push(`Fallback option ${newOptions.length + 1}`);
-  }
-  newOptions = newOptions.slice(0, 3);
-
-  const imagePrompt = `point of view perspective, create a simple image: ${newSituation}`;
-  const imageUrl = await generateImage(imagePrompt);
-
-  // After processing the AI response, check if the golden capybara was introduced
-  if (newSituation.toLowerCase().includes('golden capybara')) {
-    gameState.goldenCapybaraEncountered = true;
-    console.log('Golden capybara encountered!');
-  }
-
-  return { newSituation, newOptions, imageUrl, newPlayerHp };
 }
 
 async function preloadOutcomes() {
@@ -328,9 +338,16 @@ async function initGame() {
     goldenCapybaraEncountered: false
   };
 
-  await generateInitialStory();
-  io.emit('gameReady', gameState);  // Emit gameReady event with initial game state
-  startNewRound();
+  try {
+    await generateInitialStory();
+    io.emit('gameReady', gameState);  // Emit gameReady event with initial game state
+    startNewRound();
+  } catch (error) {
+    console.error("Error initializing game:", error);
+    gameState.currentSituation = "An error occurred while starting the game. Please try again.";
+    gameState.options = ["Restart Game"];
+    io.emit('gameReady', gameState);
+  }
 }
 
 server.listen(PORT, () => {
