@@ -5,6 +5,7 @@ const socketIo = require('socket.io');
 const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
 const OpenAI = require('openai');
+const fs = require('fs');
 
 const app = express();
 const server = http.createServer(app);
@@ -286,8 +287,66 @@ function processVotes() {
   }
 }
 
+function getMusicFileName() {
+  const musicFiles = ['infinitever.mp3', 'infiniteverse_2.mp3'];
+  const randomIndex = Math.floor(Math.random() * musicFiles.length);
+  const selectedFile = musicFiles[randomIndex];
+  
+  const musicFilePath = path.join(__dirname, 'public', selectedFile);
+  
+  if (fs.existsSync(musicFilePath)) {
+    console.log('Selected music file:', selectedFile);
+    return selectedFile;
+  } else {
+    console.error('Selected music file not found:', musicFilePath);
+    return null;
+  }
+}
+
+async function initGame() {
+  // Reset game state
+  gameState = {
+    storySoFar: '',
+    lastDecision: '',
+    currentSituation: '',
+    options: [],
+    nextOutcomes: {},
+    votes: {},
+    players: new Set(),
+    timer: null,
+    currentImage: '',
+    player: {
+      hp: 100,
+      maxHp: 100
+    },
+    goldenCapybaraEncountered: false
+  };
+
+  const musicFileName = getMusicFileName();
+
+  try {
+    await generateInitialStory();
+    io.emit('gameReady', { ...gameState, musicFileName });  // Include musicFileName in the gameReady event
+    startNewRound();
+  } catch (error) {
+    console.error("Error initializing game:", error);
+    gameState.currentSituation = "An error occurred while starting the game. Please try again.";
+    gameState.options = ["Restart Game"];
+    io.emit('gameReady', { ...gameState, musicFileName });
+  }
+}
+
+let musicFileName;
+
 io.on('connection', (socket) => {
   console.log('A user connected. Socket ID:', socket.id);
+  const selectedMusicFile = getMusicFileName();
+  if (selectedMusicFile) {
+    console.log('Sending music file name:', selectedMusicFile);
+    socket.emit('musicFile', selectedMusicFile);
+  } else {
+    console.error('No music file available to send');
+  }
   gameState.players.add(socket.id);
   console.log('Current players:', Array.from(gameState.players));
 
@@ -319,38 +378,13 @@ io.on('connection', (socket) => {
   socket.emit('updateGameState', gameState);
 });
 
-async function initGame() {
-  // Reset game state
-  gameState = {
-    storySoFar: '',
-    lastDecision: '',
-    currentSituation: '',
-    options: [],
-    nextOutcomes: {},
-    votes: {},
-    players: new Set(),
-    timer: null,
-    currentImage: '',
-    player: {
-      hp: 100,
-      maxHp: 100
-    },
-    goldenCapybaraEncountered: false
-  };
-
-  try {
-    await generateInitialStory();
-    io.emit('gameReady', gameState);  // Emit gameReady event with initial game state
-    startNewRound();
-  } catch (error) {
-    console.error("Error initializing game:", error);
-    gameState.currentSituation = "An error occurred while starting the game. Please try again.";
-    gameState.options = ["Restart Game"];
-    io.emit('gameReady', gameState);
-  }
-}
-
 server.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
+  const musicFileName = getMusicFileName();
+  if (musicFileName) {
+    console.log('Music file selected for initial load:', musicFileName);
+  } else {
+    console.warn('No music file available for initial load');
+  }
   initGame();
 });

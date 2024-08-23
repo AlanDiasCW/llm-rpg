@@ -181,6 +181,12 @@
     </style>
 </head>
 <body>
+    <audio id="backgroundMusic" loop>
+        <source src="" type="audio/mpeg">
+        Your browser does not support the audio element.
+    </audio>
+    <button id="playMusicButton" style="position: fixed; top: 10px; right: 10px; z-index: 1001;">Play Music</button>
+
     <div id="loadingScreen">
         <div class="loader-container">
             <div class="loader"></div>
@@ -229,6 +235,9 @@
         const optionsElement = document.getElementById('options');
         const timerFillElement = document.getElementById('timerFill');
         const timerTextElement = document.getElementById('timerText');
+        const backgroundMusicElement = document.getElementById('backgroundMusic');
+        const playMusicButton = document.getElementById('playMusicButton');
+        let isPlaying = false;
 
         let currentOptions = [];
 
@@ -242,6 +251,83 @@
                 element.textContent = voteCounts[index];
             });
         }
+
+        function toggleBackgroundMusic() {
+            if (musicFileName) {
+                if (isPlaying) {
+                    console.log('Pausing background music');
+                    backgroundMusicElement.pause();
+                    playMusicButton.textContent = 'Play Music';
+                    isPlaying = false;
+                } else {
+                    console.log('Playing background music');
+                    backgroundMusicElement.play()
+                        .then(() => {
+                            console.log('Background music started playing');
+                            playMusicButton.textContent = 'Pause Music';
+                            isPlaying = true;
+                        })
+                        .catch(error => {
+                            console.error('Error playing background music:', error);
+                        });
+                }
+            } else {
+                console.error('No music file name available. Current value:', musicFileName);
+            }
+        }
+
+        function playBackgroundMusic(musicFileName) {
+            if (musicFileName) {
+                console.log('Attempting to play:', musicFileName);
+                const audioSrc = '/' + musicFileName;
+                console.log('Audio source:', audioSrc);
+                backgroundMusicElement.src = audioSrc;
+                backgroundMusicElement.load();
+                
+                backgroundMusicElement.oncanplaythrough = () => {
+                    console.log('Audio can play through, attempting to play');
+                    backgroundMusicElement.play()
+                        .then(() => {
+                            console.log('Background music started playing');
+                            playMusicButton.textContent = 'Pause Music';
+                            isPlaying = true;
+                        })
+                        .catch(error => {
+                            console.error('Error playing background music:', error);
+                            playMusicButton.textContent = 'Play Music';
+                            isPlaying = false;
+                        });
+                };
+
+                backgroundMusicElement.onerror = (e) => {
+                    console.error('Error loading audio:', e);
+                    console.error('Error code:', backgroundMusicElement.error.code);
+                    console.error('Error message:', backgroundMusicElement.error.message);
+                    playMusicButton.textContent = 'Play Music';
+                    isPlaying = false;
+                    alert('Unable to load the music file. Please try again later.');
+                };
+            } else {
+                console.warn('No music file provided to playBackgroundMusic function');
+                playMusicButton.textContent = 'Play Music';
+                isPlaying = false;
+                alert('No music file available. Please try again later.');
+            }
+        }
+
+        playMusicButton.addEventListener('click', toggleBackgroundMusic);
+
+        let musicFileName = null;
+
+        socket.on('musicFile', (receivedMusicFileName) => {
+            console.log('Received music file:', receivedMusicFileName);
+            musicFileName = receivedMusicFileName;
+            if (musicFileName) {
+                playBackgroundMusic(musicFileName);
+            } else {
+                console.warn('Received empty music file name');
+            }
+        });
 
         socket.on('gameReady', (gameState) => {
             loadingScreenElement.style.display = 'none';
@@ -328,6 +414,10 @@
         function vote(optionIndex) {
             socket.emit('vote', optionIndex);
         }
+
+        // Add this to check if the audio element is properly created
+        console.log('Audio element:', backgroundMusicElement);
+        console.log('Audio element source:', backgroundMusicElement.src);
     </script>
 </body>
 </html>
