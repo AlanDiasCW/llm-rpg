@@ -288,7 +288,7 @@ function processVotes() {
 }
 
 function getMusicFileName() {
-  const musicFiles = ['infinitever.mp3', 'infiniteverse_2.mp3'];
+  const musicFiles = ['infiniteverse.mp3', 'infiniteverse_2.mp3'];
   const randomIndex = Math.floor(Math.random() * musicFiles.length);
   const selectedFile = musicFiles[randomIndex];
   
