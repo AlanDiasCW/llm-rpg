@@ -250,12 +250,22 @@
         });
 
         function updateGameState(gameState) {
+            console.log('Updating game state:', gameState);
             storySoFarElement.textContent = gameState.storySoFar;
             currentSituationElement.textContent = gameState.currentSituation;
             gameImageElement.src = gameState.currentImage;
             lastDecisionElement.textContent = gameState.lastDecision;
             
             currentOptions = gameState.options;
+            
+            // Check for win condition
+            if (gameState.options.includes('Game Over - You Win!') || 
+                gameState.currentSituation.toLowerCase().includes('congratulations') && 
+                gameState.currentSituation.toLowerCase().includes('won the game')) {
+                console.log('Win condition detected in game state');
+                handleWinCondition();
+                return;
+            }
             
             optionsElement.innerHTML = gameState.options.map((option, index) => 
                 `<li onclick="vote(${index})">
@@ -273,26 +283,7 @@
         }
 
         socket.on('updateGameState', (gameState) => {
-            storySoFarElement.textContent = gameState.storySoFar;
-            currentSituationElement.textContent = gameState.currentSituation;
-            gameImageElement.src = gameState.currentImage;
-            lastDecisionElement.textContent = gameState.lastDecision;
-            
-            currentOptions = gameState.options;
-            
-            optionsElement.innerHTML = gameState.options.map((option, index) => 
-                `<li onclick="vote(${index})">
-                    <span>${option}</span>
-                    <span class="vote-count">0</span>
-                 </li>`
-            ).join('');
-
-            updateVoteCounts(gameState.votes);
-
-            // Update HP bar
-            const hpPercentage = (gameState.player.hp / gameState.player.maxHp) * 100;
-            document.getElementById('hpFill').style.width = `${hpPercentage}%`;
-            document.getElementById('hpText').textContent = `${gameState.player.hp}/${gameState.player.maxHp} HP`;
+            updateGameState(gameState);
         });
 
         socket.on('updateVotes', (votes) => {
@@ -305,14 +296,28 @@
             timerTextElement.textContent = `${time} seconds`;
         });
 
-        socket.on('gameOver', () => {
-            optionsElement.innerHTML = `
-                <li>Game Over</li>
-                <li id="playAgainButton" onclick="restartGame()">Play Again</li>
-            `;
+        socket.on('gameOver', (reason) => {
+            console.log('Game over received. Reason:', reason);
+            if (reason === 'win') {
+                handleWinCondition();
+            } else {
+                optionsElement.innerHTML = `
+                    <li>Game Over</li>
+                    <li id="playAgainButton" onclick="restartGame()">Play Again</li>
+                `;
+            }
             timerFillElement.style.width = '0%';
             timerTextElement.textContent = '';
         });
+
+        function handleWinCondition() {
+            console.log('Handling win condition');
+            optionsElement.innerHTML = `
+                <li>Congratulations! You've escaped the simulation!</li>
+                <li id="playAgainButton" onclick="restartGame()">Play Again</li>
+            `;
+            // You can add more visual effects or animations here to celebrate the win
+        }
 
         function restartGame() {
             loadingScreenElement.style.display = 'flex';

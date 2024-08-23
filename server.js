@@ -35,7 +35,8 @@ let gameState = {
   player: {
     hp: 100,
     maxHp: 100
-  }
+  },
+  goldenCapybaraEncountered: false
 };
 
 async function generateImage(prompt) {
@@ -62,10 +63,17 @@ Player HP: ${gameState.player.hp}/${gameState.player.maxHp}
 
 Player chose: ${option}
 
-Continue the story based on this choice. Occasionally include events that affect the player's HP.
+Continue the story based on this choice. 
+Occasionally include events that affect the player's HP.
 Provide exactly three new options for the player to choose from.
 Ensure the new part of the story is no more than two sentences long.
 If the player's HP reaches 0, end the story and indicate that the game is over.
+
+${!gameState.goldenCapybaraEncountered ? "There's a small chance (about 5%) that the player encounters a mysterious golden capybara. If this happens, make sure one of the options is to pet it." : ""}
+
+${gameState.goldenCapybaraEncountered && option.toLowerCase().includes('pet') && option.toLowerCase().includes('golden capybara') ? 
+  "The player has chosen to pet the golden capybara. This is a special win condition. End the game with a message about the player escaping the simulation." : 
+  ""}
 
 Format your response as follows:
 New situation: [Your new situation here]
@@ -115,6 +123,12 @@ Game over: [Your game over message here]
   const imagePrompt = `point of view perspective, create a simple image: ${newSituation}`;
   const imageUrl = await generateImage(imagePrompt);
 
+  // After processing the AI response, check if the golden capybara was introduced
+  if (newSituation.toLowerCase().includes('golden capybara')) {
+    gameState.goldenCapybaraEncountered = true;
+    console.log('Golden capybara encountered!');
+  }
+
   return { newSituation, newOptions, imageUrl, newPlayerHp };
 }
 
@@ -141,7 +155,7 @@ async function generateInitialStory() {
     messages: [
       {
         role: 'user',
-        content: 'Generate a short initial scenario for a text-based RPG game. Include exactly three options for the player to choose from. Format your response as follows:\nScenario: [Your scenario here]\nOptions:\n1. [First option]\n2. [Second option]\n3. [Third option]'
+        content: 'Generate a short initial scenario for a text-based RPG game. Try to add sci-fi elements to the scenario, aliens, robots, AI. Include exactly three options for the player to choose from. Format your response as follows:\nScenario: [Your scenario here]\nOptions:\n1. [First option]\n2. [Second option]\n3. [Third option]'
       }
     ],
   });
@@ -176,8 +190,19 @@ async function generateInitialStory() {
 }
 
 function moveToNextStep(chosenOption) {
+  // Check for the golden capybara win condition before generating the next outcome
+  if (gameState.goldenCapybaraEncountered && gameState.options[chosenOption].toLowerCase().includes('pet') && gameState.options[chosenOption].toLowerCase().includes('golden capybara')) {
+    console.log('Win condition met! Player pet the golden capybara.');
+    gameState.currentSituation = "As you pet the golden capybara, the world around you begins to dissolve. You realize you've been in a simulation all along, and you've just found the way out. Congratulations, you've won the game!";
+    gameState.options = ['Game Over - You Win!'];
+    io.emit('updateGameState', gameState);
+    io.emit('gameOver', 'win');
+    return false;
+  }
+
   const outcome = gameState.nextOutcomes[chosenOption];
   
+  // Update game state
   gameState.storySoFar += `\n${gameState.currentSituation}`;
   gameState.lastDecision = gameState.options[chosenOption];
   gameState.currentSituation = outcome.newSituation;
@@ -187,11 +212,19 @@ function moveToNextStep(chosenOption) {
 
   console.log('Moved to next step:');
   console.log('Current situation:', gameState.currentSituation);
+  console.log('Last decision:', gameState.lastDecision);
   console.log('Options:', gameState.options);
-  console.log('Current image:', gameState.currentImage);
-  console.log('Player HP:', gameState.player.hp);
+  console.log('Golden capybara encountered:', gameState.goldenCapybaraEncountered);
+
+  // Check if the LLM has triggered the win condition
+  if (gameState.currentSituation.toLowerCase().includes('congratulations') && gameState.currentSituation.toLowerCase().includes('won the game')) {
+    io.emit('updateGameState', gameState);
+    io.emit('gameOver', 'win');
+    return false;
+  }
 
   if (gameState.options.includes('Game Over') || gameState.player.hp <= 0) {
+    io.emit('gameOver', 'lose');
     return false;
   }
 
@@ -237,7 +270,7 @@ function processVotes() {
   io.emit('updateGameState', gameState);
   
   if (!gameContinues) {
-    io.emit('gameOver');
+    io.emit('gameOver', gameState.options.includes('Game Over - You Win!') ? 'win' : 'lose');
   } else if (gameState.players.size > 0) {
     startNewRound();
   }
@@ -291,7 +324,8 @@ async function initGame() {
     player: {
       hp: 100,
       maxHp: 100
-    }
+    },
+    goldenCapybaraEncountered: false
   };
 
   await generateInitialStory();
