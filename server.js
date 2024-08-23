@@ -248,22 +248,26 @@ function moveToNextStep(chosenOption) {
   return true;
 }
 
-function startNewRound() {
-  gameState.votes = {};
-  gameState.timer = 45; 
-  io.emit('updateGameState', gameState);
-  
-  const timerInterval = setInterval(() => {
+let gameLoopInterval;
+const ROUND_DURATION = 45; // seconds
+
+function gameLoop() {
+  if (gameState.timer > 0) {
     gameState.timer--;
     io.emit('updateTimer', gameState.timer);
-    
-    if (gameState.timer <= 0) {
-      clearInterval(timerInterval);
-      processVotes();
+  } else {
+    processVotes();
+    if (gameState.players.size > 0) {
+      startNewRound();
     }
-  }, 1000);
+  }
+}
 
+function startNewRound() {
+  gameState.votes = {};
+  gameState.timer = ROUND_DURATION;
   preloadOutcomes().catch(console.error);
+  io.emit('updateGameState', gameState);
 }
 
 function processVotes() {
@@ -288,8 +292,6 @@ function processVotes() {
   
   if (!gameContinues) {
     io.emit('gameOver', gameState.options.includes('Game Over - You Win!') ? 'win' : 'lose');
-  } else if (gameState.players.size > 0) {
-    startNewRound();
   }
 }
 
@@ -332,12 +334,14 @@ async function initGame() {
 
   try {
     await generateInitialStory();
-    // Wait for the image to be generated before emitting 'gameReady'
     const imagePrompt = `Create a simple image for a text-based RPG game scenario: ${gameState.currentSituation}`;
     gameState.currentImage = await generateImage(imagePrompt);
     
     if (gameState.currentImage) {
       io.emit('gameReady', { ...gameState, musicFileName });
+      startNewRound(); // Start the first round
+      clearInterval(gameLoopInterval); // Clear any existing interval
+      gameLoopInterval = setInterval(gameLoop, 1000); // Start the game loop
     } else {
       throw new Error("Failed to generate initial image");
     }
@@ -364,9 +368,8 @@ io.on('connection', (socket) => {
   gameState.players.add(socket.id);
   console.log('Current players:', Array.from(gameState.players));
 
-  // Send current game state if the game has already started
   if (gameState.currentSituation) {
-    socket.emit('gameReady', gameState);
+    socket.emit('gameReady', { ...gameState, timer: gameState.timer });
   }
 
   socket.on('disconnect', () => {
@@ -387,11 +390,6 @@ io.on('connection', (socket) => {
   socket.on('restartGame', () => {
     console.log('Restarting game...');
     initGame();
-  });
-
-  socket.on('startGame', () => {
-    console.log('Starting game for player:', socket.id);
-    startNewRound();
   });
 
   socket.emit('updateGameState', gameState);

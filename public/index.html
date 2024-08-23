@@ -365,6 +365,8 @@
                 playButton.style.display = 'block';
                 loadingText.innerHTML = 'Ready to play!';
                 updateGameState(gameState);
+                // Update the timer immediately for new players
+                updateTimer(gameState.timer);
             } else {
                 console.error('Received incomplete game state:', gameState);
                 loadingText.innerHTML = 'Error loading game. Please refresh.';
@@ -375,7 +377,8 @@
             if (gameLoaded) {
                 loadingScreenElement.style.display = 'none';
                 gameContainerElement.style.display = 'flex';
-                socket.emit('startGame');
+                // Remove the startGame emit, as the game is already in progress
+                // socket.emit('startGame');
             } else {
                 console.log('Game is still loading. Please wait.');
             }
@@ -422,10 +425,14 @@
             updateVoteCounts(votes);
         });
 
-        socket.on('updateTimer', (time) => {
-            const percentage = (time / 45) * 100; // Assuming 25 seconds total
+        function updateTimer(time) {
+            const percentage = (time / 45) * 100;
             timerFillElement.style.width = `${percentage}%`;
             timerTextElement.textContent = `${time} seconds`;
+        }
+
+        socket.on('updateTimer', (time) => {
+            updateTimer(time);
         });
 
         socket.on('gameOver', (reason) => {
