@@ -244,7 +244,7 @@ function moveToNextStep(chosenOption) {
 
 function startNewRound() {
   gameState.votes = {};
-  gameState.timer = 25; 
+  gameState.timer = 45; 
   io.emit('updateGameState', gameState);
   
   const timerInterval = setInterval(() => {
