@@ -192,6 +192,7 @@
             padding: 13px 34px; /* Reduced from 15px 40px */
             cursor: pointer;
             transition: background-color 0.3s ease;
+            display: none; /* Hide the button initially */
         }
 
         #playButton:hover {
@@ -215,7 +216,7 @@
         <div class="loader-container">
             <div class="loader"></div>
             <div class="loading-text">infinite<span>verse</span></div>
-            <button id="playButton" style="display: none;">Play</button>
+            <button id="playButton">Play</button>
         </div>
     </div>
 
@@ -356,11 +357,18 @@
 
         let gameLoaded = false;
         const playButton = document.getElementById('playButton');
+        const loadingText = document.querySelector('.loading-text');
 
         socket.on('gameReady', (gameState) => {
-            gameLoaded = true;
-            playButton.style.display = 'block';
-            updateGameState(gameState);
+            if (gameState.currentSituation && gameState.currentImage) {
+                gameLoaded = true;
+                playButton.style.display = 'block';
+                loadingText.textContent = 'Ready to play!';
+                updateGameState(gameState);
+            } else {
+                console.error('Received incomplete game state:', gameState);
+                loadingText.textContent = 'Error loading game. Please refresh.';
+            }
         });
 
         playButton.addEventListener('click', () => {

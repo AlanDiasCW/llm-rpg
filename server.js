@@ -326,11 +326,20 @@ async function initGame() {
 
   try {
     await generateInitialStory();
-    io.emit('gameReady', { ...gameState, musicFileName });  // Include musicFileName in the gameReady event
+    // Wait for the image to be generated before emitting 'gameReady'
+    const imagePrompt = `Create a simple image for a text-based RPG game scenario: ${gameState.currentSituation}`;
+    gameState.currentImage = await generateImage(imagePrompt);
+    
+    if (gameState.currentImage) {
+      io.emit('gameReady', { ...gameState, musicFileName });
+    } else {
+      throw new Error("Failed to generate initial image");
+    }
   } catch (error) {
     console.error("Error initializing game:", error);
     gameState.currentSituation = "An error occurred while starting the game. Please try again.";
     gameState.options = ["Restart Game"];
+    gameState.currentImage = ''; // Set a default or error image URL if needed
     io.emit('gameReady', { ...gameState, musicFileName });
   }
 }
