@@ -363,11 +363,11 @@
             if (gameState.currentSituation && gameState.currentImage) {
                 gameLoaded = true;
                 playButton.style.display = 'block';
-                loadingText.textContent = 'Ready to play!';
+                loadingText.innerHTML = 'Ready to play!';
                 updateGameState(gameState);
             } else {
                 console.error('Received incomplete game state:', gameState);
-                loadingText.textContent = 'Error loading game. Please refresh.';
+                loadingText.innerHTML = 'Error loading game. Please refresh.';
             }
         });
 
@@ -454,8 +454,30 @@
         }
 
         function restartGame() {
+            // Reset game state
+            gameLoaded = false;
+            currentOptions = [];
+            
+            // Reset UI
             loadingScreenElement.style.display = 'flex';
             gameContainerElement.style.display = 'none';
+            playButton.style.display = 'none';
+            loadingText.innerHTML = 'infinite<span>verse</span>';
+            
+            // Reset game elements
+            storySoFarElement.textContent = '';
+            currentSituationElement.textContent = '';
+            gameImageElement.src = '';
+            lastDecisionElement.textContent = '';
+            optionsElement.innerHTML = '';
+            
+            // Reset stats
+            document.getElementById('hpFill').style.width = '100%';
+            document.getElementById('hpText').textContent = '100/100 HP';
+            timerFillElement.style.width = '0%';
+            timerTextElement.textContent = '';
+            
+            // Emit restart event to server
             socket.emit('restartGame');
         }
 
