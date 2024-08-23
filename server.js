@@ -6,6 +6,7 @@ const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
 const OpenAI = require('openai');
 const fs = require('fs');
+const punycode = require('punycode/');
 
 const app = express();
 const server = http.createServer(app);
@@ -37,7 +38,8 @@ let gameState = {
     hp: 100,
     maxHp: 100
   },
-  goldenCapybaraEncountered: false
+  goldenCapybaraEncountered: false,
+  showIntermediaryScreen: true,
 };
 
 async function generateImage(prompt) {
@@ -55,92 +57,92 @@ async function generateImage(prompt) {
   }
 }
 
-async function generateOutcome(option) {
-  try {
-    const prompt = `
-    Story so far: ${gameState.storySoFar}
-    Last decision: ${gameState.lastDecision}
-    Current situation: ${gameState.currentSituation}
-    Player HP: ${gameState.player.hp}/${gameState.player.maxHp}
+async function generateOutcome(input) {
+    if (!input || typeof input !== 'string') {
+        console.error('Invalid input to generateOutcome:', input);
+        return null;
+    }
+    try {
+        const prompt = `
+        Story so far: ${gameState.storySoFar}
+        Last decision: ${gameState.lastDecision}
+        Current situation: ${gameState.currentSituation}
+        Player HP: ${gameState.player.hp}/${gameState.player.maxHp}
 
-    Player chose: ${option}
+        Player chose: ${input}
 
-    Continue the story based on this choice. 
-    Occasionally include events that affect the player's HP.
-    Provide exactly three new options for the player to choose from.
-    Ensure the new part of the story is no more than two sentences long.
-    If the player's HP reaches 0, end the story and indicate that the game is over.
+        Continue the story based on this choice. 
+        Occasionally include events that affect the player's HP.
+        Provide exactly three new options for the player to choose from.
+        Ensure the new part of the story is no more than two sentences long.
+        If the player's HP reaches 0, end the story and indicate that the game is over.
 
-    ${!gameState.goldenCapybaraEncountered ? "There's a small chance (about 5%) that the player encounters a mysterious golden capybara. If this happens, make sure one of the options is to pet it." : ""}
+        ${!gameState.goldenCapybaraEncountered ? "There's a small chance (about 5%) that the player encounters a mysterious golden capybara. If this happens, make sure one of the options is to pet it." : ""}
 
-    ${gameState.goldenCapybaraEncountered && option.toLowerCase().includes('pet') && option.toLowerCase().includes('golden capybara') ? 
-      "The player has chosen to pet the golden capybara. This is a special win condition. End the game with a message about the player escaping the simulation." : 
-      ""}
+        ${gameState.goldenCapybaraEncountered && input.toLowerCase().includes('pet') && input.toLowerCase().includes('golden capybara') ? 
+          "The player has chosen to pet the golden capybara. This is a special win condition. End the game with a message about the player escaping the simulation." : 
+          ""}
 
-    Format your response as follows:
-    New situation: [Your new situation here]
-    Player HP: [Updated player HP]
-    Options:
-    1. [First option]
-    2. [Second option]
-    3. [Third option]
+        Format your response as follows:
+        New situation: [Your new situation here]
+        Player HP: [Updated player HP]
+        Options:
+        1. [First option]
+        2. [Second option]
+        3. [Third option]
 
-    If it's a game over scenario, just respond with:
-    Game over: [Your game over message here]
-    `;
+        If it's a game over scenario, just respond with:
+        Game over: [Your game over message here]
+        `;
 
-    const response = await anthropic.messages.create({
-      model: 'claude-3-sonnet-20240229',
-      max_tokens: 300,
-      messages: [
-        {
-          role: 'user',
-          content: prompt
+        const response = await anthropic.messages.create({
+          model: 'claude-3-sonnet-20240229',
+          max_tokens: 300,
+          messages: [
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+        });
+
+        const content = response.content[0].text.trim().split('\n');
+        console.log('AI response (truncated):', content[0].substring(0, 10) + '...');
+        let newSituation, newOptions, newPlayerHp;
+
+        if (content[0].toLowerCase().startsWith('game over:')) {
+          newSituation = content[0];
+          newOptions = ['Game Over'];
+          newPlayerHp = 0;
+        } else {
+          const situationIndex = content.findIndex(line => line.startsWith('New situation:'));
+          const playerHpIndex = content.findIndex(line => line.startsWith('Player HP:'));
+          const optionsIndex = content.findIndex(line => line.startsWith('Options:'));
+
+          newSituation = content[situationIndex].replace('New situation:', '').trim();
+          newPlayerHp = parseInt(content[playerHpIndex].split(':')[1].trim());
+          newOptions = content.slice(optionsIndex + 1).map(option => option.replace(/^\d+\.\s*/, '').trim()).filter(option => option !== '');
         }
-      ],
-    });
 
-    const content = response.content[0].text.trim().split('\n');
-    let newSituation, newOptions, newPlayerHp;
+        while (newOptions.length < 3 && !newOptions.includes('Game Over')) {
+          newOptions.push(`Fallback option ${newOptions.length + 1}`);
+        }
+        newOptions = newOptions.slice(0, 3);
 
-    if (content[0].toLowerCase().startsWith('game over:')) {
-      newSituation = content[0];
-      newOptions = ['Game Over'];
-      newPlayerHp = 0;
-    } else {
-      const situationIndex = content.findIndex(line => line.startsWith('New situation:'));
-      const playerHpIndex = content.findIndex(line => line.startsWith('Player HP:'));
-      const optionsIndex = content.findIndex(line => line.startsWith('Options:'));
+        const imagePrompt = `point of view perspective, create a simple image: ${newSituation}`;
+        const imageUrl = await generateImage(imagePrompt);
 
-      newSituation = content[situationIndex].replace('New situation:', '').trim();
-      newPlayerHp = parseInt(content[playerHpIndex].split(':')[1].trim());
-      newOptions = content.slice(optionsIndex + 1).map(option => option.replace(/^\d+\.\s*/, '').trim()).filter(option => option !== '');
+        // After processing the AI response, check if the golden capybara was introduced
+        if (newSituation.toLowerCase().includes('golden capybara')) {
+          gameState.goldenCapybaraEncountered = true;
+          console.log('Golden capybara encountered!');
+        }
+
+        return { newSituation, newOptions, imageUrl, newPlayerHp };
+    } catch (error) {
+        console.error('Error in generateOutcome:', error);
+        return null;
     }
-
-    while (newOptions.length < 3 && !newOptions.includes('Game Over')) {
-      newOptions.push(`Fallback option ${newOptions.length + 1}`);
-    }
-    newOptions = newOptions.slice(0, 3);
-
-    const imagePrompt = `point of view perspective, create a simple image: ${newSituation}`;
-    const imageUrl = await generateImage(imagePrompt);
-
-    // After processing the AI response, check if the golden capybara was introduced
-    if (newSituation.toLowerCase().includes('golden capybara')) {
-      gameState.goldenCapybaraEncountered = true;
-      console.log('Golden capybara encountered!');
-    }
-
-    return { newSituation, newOptions, imageUrl, newPlayerHp };
-  } catch (error) {
-    console.error("Error in generateOutcome:", error);
-    return {
-      newSituation: "An unexpected error occurred. Please try again.",
-      newOptions: ["Restart the game"],
-      newPlayerHp: gameState.player.hp,
-      imageUrl: gameState.currentImage
-    };
-  }
 }
 
 async function preloadOutcomes() {
@@ -172,6 +174,7 @@ async function generateInitialStory() {
   });
 
   const result = response.content[0].text.trim().split('\n');
+  console.log('Initial story (truncated):', result[0].substring(0, 10) + '...');
   const scenarioIndex = result.findIndex(line => line.startsWith('Scenario:'));
   const optionsIndex = result.findIndex(line => line.startsWith('Options:'));
   
@@ -252,6 +255,10 @@ let gameLoopInterval;
 const ROUND_DURATION = 45; // seconds
 
 function gameLoop() {
+  console.log('Game loop - showIntermediaryScreen:', gameState.showIntermediaryScreen);
+  if (gameState.showIntermediaryScreen) {
+    return; // Don't update timer while showing intermediary screen
+  }
   if (gameState.timer > 0) {
     gameState.timer--;
     io.emit('updateTimer', gameState.timer);
@@ -264,10 +271,16 @@ function gameLoop() {
 }
 
 function startNewRound() {
+  console.log('Starting new round');
   gameState.votes = {};
   gameState.timer = ROUND_DURATION;
+  gameState.showIntermediaryScreen = true;
+  console.log('Emitting showIntermediaryScreen event');
+  io.emit('showIntermediaryScreen', {
+    currentSituation: gameState.currentSituation,
+    currentImage: gameState.currentImage
+  });
   preloadOutcomes().catch(console.error);
-  io.emit('updateGameState', gameState);
 }
 
 function processVotes() {
@@ -327,7 +340,8 @@ async function initGame() {
       hp: 100,
       maxHp: 100
     },
-    goldenCapybaraEncountered: false
+    goldenCapybaraEncountered: false,
+    showIntermediaryScreen: true,
   };
 
   const musicFileName = getMusicFileName();
@@ -357,7 +371,7 @@ async function initGame() {
 let musicFileName;
 
 io.on('connection', (socket) => {
-  console.log('A user connected. Socket ID:', socket.id);
+  console.log('New connection. Socket ID:', socket.id);
   const selectedMusicFile = getMusicFileName();
   if (selectedMusicFile) {
     console.log('Sending music file name:', selectedMusicFile);
@@ -390,6 +404,14 @@ io.on('connection', (socket) => {
   socket.on('restartGame', () => {
     console.log('Restarting game...');
     initGame();
+  });
+
+  socket.on('startVotingPhase', () => {
+    console.log('Received startVotingPhase event from', socket.id);
+    gameState.showIntermediaryScreen = false;
+    console.log('Emitting startVotingPhase event');
+    io.emit('startVotingPhase', gameState);
+    gameState.timer = ROUND_DURATION;
   });
 
   socket.emit('updateGameState', gameState);

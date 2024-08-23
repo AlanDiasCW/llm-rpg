@@ -203,6 +203,53 @@
             outline: none;
             box-shadow: 0 0 0 3px rgba(124, 252, 0, 0.5);
         }
+
+        #intermediaryScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            display: none;
+        }
+
+        #intermediaryScreen img {
+            max-width: 80%;
+            max-height: 60vh;
+            object-fit: contain;
+            margin-bottom: 20px;
+        }
+
+        #intermediaryScreen p {
+            color: white;
+            font-size: 18px;
+            text-align: center;
+            max-width: 80%;
+            margin-bottom: 20px;
+        }
+
+        #nextButton {
+            font-family: 'Roboto', sans-serif;
+            font-size: 20px;
+            font-weight: 700;
+            color: #ffffff;
+            background-color: #32cd32;
+            border: none;
+            border-radius: 5px;
+            padding: 13px 34px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        #nextButton:hover {
+            background-color: #28a428;
+        }
     </style>
 </head>
 <body>
@@ -246,6 +293,12 @@
             </div>
             <ul id="options"></ul>
         </div>
+    </div>
+
+    <div id="intermediaryScreen">
+        <img id="intermediaryImage" src="" alt="Round Image">
+        <p id="intermediarySituation"></p>
+        <button id="nextButton">Next</button>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
@@ -360,13 +413,25 @@
         const loadingText = document.querySelector('.loading-text');
 
         socket.on('gameReady', (gameState) => {
+            console.log('Received gameReady event', gameState);
             if (gameState.currentSituation && gameState.currentImage) {
                 gameLoaded = true;
                 playButton.style.display = 'block';
                 loadingText.innerHTML = 'Ready to play!';
                 updateGameState(gameState);
-                // Update the timer immediately for new players
                 updateTimer(gameState.timer);
+                
+                console.log('showIntermediaryScreen:', gameState.showIntermediaryScreen);
+                if (gameState.showIntermediaryScreen) {
+                    console.log('Showing intermediary screen from gameReady');
+                    showIntermediaryScreen({
+                        currentSituation: gameState.currentSituation,
+                        currentImage: gameState.currentImage
+                    });
+                } else {
+                    console.log('Hiding intermediary screen from gameReady');
+                    hideIntermediaryScreen();
+                }
             } else {
                 console.error('Received incomplete game state:', gameState);
                 loadingText.innerHTML = 'Error loading game. Please refresh.';
@@ -377,15 +442,13 @@
             if (gameLoaded) {
                 loadingScreenElement.style.display = 'none';
                 gameContainerElement.style.display = 'flex';
-                // Remove the startGame emit, as the game is already in progress
-                // socket.emit('startGame');
             } else {
                 console.log('Game is still loading. Please wait.');
             }
         });
 
         function updateGameState(gameState) {
-            console.log('Updating game state:', gameState);
+            console.log('Updating game state', gameState);
             storySoFarElement.textContent = gameState.storySoFar;
             currentSituationElement.textContent = gameState.currentSituation;
             gameImageElement.src = gameState.currentImage;
@@ -393,21 +456,19 @@
             
             currentOptions = gameState.options;
             
-            // Check for win condition
-            if (gameState.options.includes('Game Over - You Win!') || 
-                gameState.currentSituation.toLowerCase().includes('congratulations') && 
-                gameState.currentSituation.toLowerCase().includes('won the game')) {
-                console.log('Win condition detected in game state');
-                handleWinCondition(gameState);
-                return;
+            console.log('showIntermediaryScreen:', gameState.showIntermediaryScreen);
+            // Only show options if not in intermediary screen
+            if (!gameState.showIntermediaryScreen) {
+                console.log('Updating options');
+                optionsElement.innerHTML = gameState.options.map((option, index) => 
+                    `<li onclick="vote(${index})">
+                        <span>${option}</span>
+                        <span class="vote-count">0</span>
+                     </li>`
+                ).join('');
+            } else {
+                console.log('Not updating options due to intermediary screen');
             }
-            
-            optionsElement.innerHTML = gameState.options.map((option, index) => 
-                `<li onclick="vote(${index})">
-                    <span>${option}</span>
-                    <span class="vote-count">0</span>
-                 </li>`
-            ).join('');
 
             updateVoteCounts(gameState.votes);
 
@@ -495,6 +556,42 @@
         // Add this to check if the audio element is properly created
         console.log('Audio element:', backgroundMusicElement);
         console.log('Audio element source:', backgroundMusicElement.src);
+
+        const intermediaryScreenElement = document.getElementById('intermediaryScreen');
+        const intermediaryImageElement = document.getElementById('intermediaryImage');
+        const intermediarySituationElement = document.getElementById('intermediarySituation');
+        const nextButton = document.getElementById('nextButton');
+
+        function showIntermediaryScreen(data) {
+            console.log('Showing intermediary screen', data);
+            intermediaryImageElement.src = data.currentImage;
+            intermediarySituationElement.textContent = data.currentSituation;
+            intermediaryScreenElement.style.display = 'flex';
+            gameContainerElement.style.display = 'none';
+            loadingScreenElement.style.display = 'none'; // Ensure loading screen is hidden
+        }
+
+        function hideIntermediaryScreen() {
+            console.log('Hiding intermediary screen');
+            intermediaryScreenElement.style.display = 'none';
+            gameContainerElement.style.display = 'flex';
+        }
+
+        socket.on('showIntermediaryScreen', (data) => {
+            console.log('Received showIntermediaryScreen event', data);
+            showIntermediaryScreen(data);
+        });
+
+        socket.on('startVotingPhase', (gameState) => {
+            console.log('Received startVotingPhase event', gameState);
+            hideIntermediaryScreen();
+            updateGameState(gameState);
+        });
+
+        nextButton.addEventListener('click', () => {
+            console.log('Next button clicked');
+            socket.emit('startVotingPhase');
+        });
     </script>
 </body>
 </html>
