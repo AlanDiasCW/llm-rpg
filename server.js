@@ -6,7 +6,6 @@ const path = require('path');
 const Anthropic = require('@anthropic-ai/sdk');
 const OpenAI = require('openai');
 const fs = require('fs');
-const punycode = require('punycode/');
 
 const app = express();
 const server = http.createServer(app);
